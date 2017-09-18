@@ -8,8 +8,6 @@ import (
 	"net/http"
 )
 
-// http://api.openweathermap.org/data/2.5/forecast?zip=22304&APPID=946b324f486a4ede799d2b98f38b1e34
-
 func main() {
 	http.HandleFunc("/", handler)
 	log.Fatal(http.ListenAndServe("localhost:8080", nil))
