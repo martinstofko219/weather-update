@@ -1,16 +1,17 @@
-package main
+package weather
 
 import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
+
+	"google.golang.org/appengine"
+	"google.golang.org/appengine/urlfetch"
 )
 
-func main() {
+func init() {
 	http.HandleFunc("/", handler)
-	log.Fatal(http.ListenAndServe("localhost:8080", nil))
 }
 
 type weatherResponse struct {
@@ -27,19 +28,21 @@ type weatherResponse struct {
 
 func handler(w http.ResponseWriter, r *http.Request) {
 
-	res, err := http.Get("http://api.openweathermap.org/data/2.5/forecast?zip=22304&APPID=946b324f486a4ede799d2b98f38b1e34")
+	ctx := appengine.NewContext(r)
+	client := urlfetch.Client(ctx)
+	resp, err := client.Get("http://api.openweathermap.org/data/2.5/forecast?zip=22304&APPID=946b324f486a4ede799d2b98f38b1e34")
 	if err != nil {
-		http.Error(w, "could not perform request", http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	if res.StatusCode != http.StatusOK {
-		http.Error(w, res.Status, res.StatusCode)
+	if resp.StatusCode != http.StatusOK {
+		http.Error(w, resp.Status, resp.StatusCode)
 		return
 	}
 
-	defer res.Body.Close()
-	b, err := ioutil.ReadAll(res.Body)
+	defer resp.Body.Close()
+	b, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		fmt.Fprintf(w, "could not read response body: %v", err)
 		return
