@@ -41,16 +41,16 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	defer res.Body.Close()
 	b, err := ioutil.ReadAll(res.Body)
 	if err != nil {
-		log.Printf("could not read response body: %v", err)
+		fmt.Fprintf(w, "could not read response body: %v", err)
 		return
 	}
 
 	var results = new(weatherResponse)
 	err = json.Unmarshal(b, &results)
 	if err != nil {
-		fmt.Printf("count not parse response body: %v", err)
+		fmt.Fprintf(w, "count not parse response body: %v", err)
 		return
 	}
 
-	fmt.Print(results)
+	fmt.Fprint(w, results)
 }
