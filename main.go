@@ -34,7 +34,7 @@ var (
 )
 
 func init() {
-	http.HandleFunc("/", handler)
+	http.HandleFunc("/checkTask", checkTaskHandler)
 	http.HandleFunc("/checkNow", checkNowHandler)
 }
 
@@ -54,7 +54,7 @@ type weatherResponse struct {
 	} `json:"list"`
 }
 
-func handler(w http.ResponseWriter, r *http.Request) {
+func checkTaskHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := appengine.NewContext(r)
 
 	results, err := fetchWeather(ctx, weatherAPI)

@@ -1,4 +1,4 @@
 cron:
 - description: "weather update check"
-  url: /
+  url: /checkTask
   schedule: every 3 hours from 8:00 to 20:00
