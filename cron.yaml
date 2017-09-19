@@ -1,0 +1,4 @@
+cron:
+- description: "weather update check"
+  url: /
+  schedule: every 3 hours from 8:00 to 20:00
