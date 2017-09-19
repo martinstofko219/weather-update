@@ -4,3 +4,6 @@ api_version: go1
 handlers:
 - url: /.*
   script: _go_app
+
+env_variables:
+  WEATHER_API_KEY: "946b324f486a4ede799d2b98f38b1e34"
