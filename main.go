@@ -1,16 +1,18 @@
-package weather
+package weatherupdate
 
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"google.golang.org/appengine"
+	"google.golang.org/appengine/log"
 	"google.golang.org/appengine/urlfetch"
 )
 
@@ -19,36 +21,21 @@ const (
 	weddingMonth = time.September
 	weddingDay   = 23
 	weddingHour  = 15
+
+	twilioNumber = "+18457648204"
+	passphrase   = "wedding weather"
+
+	weatherHistoryKey = "history1"
+)
+
+var (
+	weatherAPI       = "http://api.openweathermap.org/data/2.5/forecast?zip=22304&units=imperial&APPID=" + os.Getenv("WEATHER_API_KEY")
+	twilioSendSMSAPI = "https://api.twilio.com/2010-04-01/Accounts/" + os.Getenv("TWILIO_ACCOUNT_SID") + "/Messages"
 )
 
 func init() {
 	http.HandleFunc("/", handler)
-	http.HandleFunc("/sendMessage", messageHandler)
-}
-
-func messageHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := appengine.NewContext(r)
-	client := urlfetch.Client(ctx)
-
-	msg := url.Values{}
-	msg.Set("To", "+18456496408")
-	msg.Set("From", "+18457648204")
-	msg.Set("Body", "Hello from Go!")
-
-	b := strings.NewReader(msg.Encode())
-
-	req, _ := http.NewRequest("POST", "https://api.twilio.com/2010-04-01/Accounts/"+os.Getenv("TWILIO_ACCOUNT_SID")+"/Messages", b)
-	req.SetBasicAuth(os.Getenv("TWILIO_ACCOUNT_SID"), os.Getenv("TWILIO_AUTH_TOKEN"))
-	req.Header.Add("Accept", "application/json")
-	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	fmt.Fprintln(w, resp.Status)
+	http.HandleFunc("/checkNow", checkNowHandler)
 }
 
 type weatherResponse struct {
@@ -69,42 +56,116 @@ type weatherResponse struct {
 
 func handler(w http.ResponseWriter, r *http.Request) {
 	ctx := appengine.NewContext(r)
-	client := urlfetch.Client(ctx)
 
-	resp, err := client.Get("http://api.openweathermap.org/data/2.5/forecast?zip=22304&units=imperial&APPID=" + os.Getenv("WEATHER_API_KEY"))
+	results, err := fetchWeather(ctx, weatherAPI)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "could not fetch weather data", http.StatusInternalServerError)
+		log.Errorf(ctx, "could not fetch weather data: %v", err)
 		return
+	}
+
+	var history = new(weatherHistory)
+	history.load(ctx)
+
+	if history.changed(*results) {
+		msgBody := messageBody(*results)
+		history.update(ctx, *results)
+
+		if err := sendMessage(ctx, msgBody, "+18456496408"); err != nil {
+			http.Error(w, "could not send sms", http.StatusInternalServerError)
+			log.Errorf(ctx, "could not send sms: %v", err)
+			return
+		}
+	}
+}
+
+const smsAllowContent = `<?xml version="1.0" encoding="UTF-8"?>
+	<Response>
+		<Message>
+			<Body>%s</Body>
+		</Message>
+	</Response>`
+
+const smsDenyContent = `<?xml version="1.0" encoding="UTF-8"?>
+	<Response>
+		<Message>
+			<Media>%s</Media>
+		</Message>
+	</Response>`
+
+func checkNowHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := appengine.NewContext(r)
+	w.Header().Set("Content-Type", "text/xml")
+
+	body := r.PostFormValue("Body")
+	if !strings.EqualFold(body, passphrase) {
+		media := "http://www.icge.co.uk/languagesciencesblog/wp-content/uploads/2014/04/you_shall_not_pass1.jpg"
+		fmt.Fprintf(w, smsDenyContent, media)
+		return
+	}
+
+	results, err := fetchWeather(ctx, weatherAPI)
+	if err != nil {
+		http.Error(w, "could not fetch weather data", http.StatusInternalServerError)
+		log.Errorf(ctx, "could not fetch weather data: %v", err)
+		return
+	}
+
+	reply := messageBody(*results)
+	fmt.Fprintf(w, smsAllowContent, reply)
+}
+
+func fetchWeather(ctx context.Context, url string) (*weatherResponse, error) {
+	resp, err := urlfetch.Client(ctx).Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("could not get weather api data: %v", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		http.Error(w, resp.Status, resp.StatusCode)
-		return
-	}
-
-	defer resp.Body.Close()
-	b, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		fmt.Fprintf(w, "could not read response body: %v\n", err)
-		return
+		return nil, fmt.Errorf(resp.Status)
 	}
 
 	var results = new(weatherResponse)
-	err = json.Unmarshal(b, &results)
-	if err != nil {
-		fmt.Fprintf(w, "count not parse response body: %v\n", err)
-		return
-	}
 
+	defer resp.Body.Close()
+	if err = json.NewDecoder(resp.Body).Decode(&results); err != nil {
+		return nil, fmt.Errorf("count not decode weather response: %v", err)
+	}
+	return results, nil
+}
+
+func sendMessage(ctx context.Context, body string, toNumber string) error {
+	vals := url.Values{}
+	vals.Set("To", toNumber)
+	vals.Set("From", twilioNumber)
+	vals.Set("Body", body)
+
+	mb := strings.NewReader(vals.Encode())
+	req, err := http.NewRequest("POST", twilioSendSMSAPI, mb)
+	if err != nil {
+		return fmt.Errorf("could not create sms request: %v", err)
+	}
+	req.SetBasicAuth(os.Getenv("TWILIO_ACCOUNT_SID"), os.Getenv("TWILIO_AUTH_TOKEN"))
+	req.Header.Add("Accept", "application/json")
+	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+
+	_, err = urlfetch.Client(ctx).Do(req)
+	if err != nil {
+		return fmt.Errorf("could not send sms request: %v", err)
+	}
+	return nil
+}
+
+func messageBody(results weatherResponse) string {
+	msg := "Wedding Weather Report\n"
 	for _, r := range results.List {
 		t := time.Unix(r.Dt, 0)
-
 		if isWeddingDay(t) {
-			for _, weather := range r.Weather {
-				fmt.Fprintln(w, weather.Main, weather.Description, r.Main.Temp, r.Main.Humidity, t)
-			}
+			msg += fmt.Sprintf("Temp: %d degrees\nHumidity: %d%%\n%s: %s",
+				int(r.Main.Temp), r.Main.Humidity, r.Weather[0].Main, r.Weather[0].Description)
 		}
 	}
+	return msg
 }
 
 func isWeddingDay(d time.Time) bool {
