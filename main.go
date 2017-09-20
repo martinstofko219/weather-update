@@ -71,10 +71,14 @@ func checkTaskHandler(w http.ResponseWriter, r *http.Request) {
 		msgBody := messageBody(*results)
 		history.update(ctx, *results)
 
-		if err := sendMessage(ctx, msgBody, "+18456496408"); err != nil {
-			http.Error(w, "could not send sms", http.StatusInternalServerError)
-			log.Errorf(ctx, "could not send sms: %v", err)
-			return
+		receiverNumbers := []string{"+18456496408", "+12405384163"}
+		for _, n := range receiverNumbers {
+			log.Infof(ctx, "sending to: %s", n)
+			if err := sendMessage(ctx, msgBody, n); err != nil {
+				http.Error(w, "could not send sms", http.StatusInternalServerError)
+				log.Errorf(ctx, "could not send sms: %v", err)
+				return
+			}
 		}
 	}
 }
