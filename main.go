@@ -78,7 +78,6 @@ func checkTaskHandler(w http.ResponseWriter, r *http.Request) {
 			if err := sendMessage(ctx, msgBody, n); err != nil {
 				http.Error(w, "could not send sms", http.StatusInternalServerError)
 				log.Errorf(ctx, "could not send sms: %v", err)
-				return
 			}
 		}
 	}
