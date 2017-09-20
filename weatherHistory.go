@@ -8,11 +8,6 @@ import (
 	"google.golang.org/appengine/log"
 )
 
-/*
-	history := &weatherHistory{r.Weather[0].Main, r.Weather[0].Description}
-	history.update(ctx)
-*/
-
 type weatherHistory struct {
 	Main        string
 	Description string
@@ -40,7 +35,6 @@ func (wh *weatherHistory) update(ctx context.Context, results weatherResponse) {
 	}
 
 	key := datastore.NewKey(ctx, "WeatherHistory", weatherHistoryKey, 0, nil)
-	// key := datastore.NewIncompleteKey(ctx, "WeatherHistory", nil)
 	if _, err := datastore.Put(ctx, key, wh); err != nil {
 		log.Errorf(ctx, "could not update weather history in datastore: %v", err)
 	}
