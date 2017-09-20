@@ -36,6 +36,7 @@ var (
 func init() {
 	http.HandleFunc("/checkTask", checkTaskHandler)
 	http.HandleFunc("/checkNow", checkNowHandler)
+	http.HandleFunc("/checkPhone", checkPhoneHandler)
 }
 
 type weatherResponse struct {
@@ -119,6 +120,26 @@ func checkNowHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, smsAllowContent, reply)
 }
 
+const phoneMessage = `<?xml version="1.0" encoding="UTF-8"?>
+	<Response>
+		<Say voice="woman">%s</Say>
+	</Response>`
+
+func checkPhoneHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := appengine.NewContext(r)
+	w.Header().Set("Content-Type", "text/xml")
+
+	results, err := fetchWeather(ctx, weatherAPI)
+	if err != nil {
+		http.Error(w, "could not fetch weather data", http.StatusInternalServerError)
+		log.Errorf(ctx, "could not fetch weather data: %v", err)
+		return
+	}
+
+	reply := phoneBody(*results)
+	fmt.Fprintf(w, phoneMessage, reply)
+}
+
 func fetchWeather(ctx context.Context, url string) (*weatherResponse, error) {
 	resp, err := urlfetch.Client(ctx).Get(url)
 	if err != nil {
@@ -167,6 +188,18 @@ func messageBody(results weatherResponse) string {
 		if isWeddingDay(t) {
 			msg += fmt.Sprintf("Temp: %d degrees\nHumidity: %d%%\n%s: %s",
 				int(r.Main.Temp), r.Main.Humidity, r.Weather[0].Main, r.Weather[0].Description)
+		}
+	}
+	return msg
+}
+
+func phoneBody(results weatherResponse) string {
+	msg := "Wedding Weather Report. September 23rd at 3pm. "
+	for _, r := range results.List {
+		t := time.Unix(r.Dt, 0)
+		if isWeddingDay(t) {
+			msg += fmt.Sprintf("Temperature: %d degrees. Humidity: %d%%. Conditions: %s.",
+				int(r.Main.Temp), r.Main.Humidity, r.Weather[0].Description)
 		}
 	}
 	return msg
