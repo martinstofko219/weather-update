@@ -9,6 +9,8 @@ import (
 )
 
 type weatherHistory struct {
+	Temp        int
+	Humidity    int
 	Main        string
 	Description string
 }
@@ -29,6 +31,8 @@ func (wh *weatherHistory) update(ctx context.Context, results weatherResponse) {
 	for _, r := range results.List {
 		t := time.Unix(r.Dt, 0)
 		if isWeddingDay(t) {
+			wh.Temp = int(r.Main.Temp)
+			wh.Humidity = r.Main.Humidity
 			wh.Main = r.Weather[0].Main
 			wh.Description = r.Weather[0].Description
 		}
@@ -48,7 +52,8 @@ func (wh *weatherHistory) changed(results weatherResponse) bool {
 	for _, r := range results.List {
 		t := time.Unix(r.Dt, 0)
 		if isWeddingDay(t) {
-			return r.Weather[0].Main != wh.Main || r.Weather[0].Description != wh.Description
+			return r.Weather[0].Main != wh.Main || r.Weather[0].Description != wh.Description ||
+				int(r.Main.Temp) != wh.Temp || r.Main.Humidity != wh.Humidity
 		}
 	}
 	return false
