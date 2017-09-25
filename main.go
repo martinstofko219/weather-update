@@ -22,7 +22,7 @@ const (
 	weddingDay   = 23
 	weddingHour  = 15
 
-	twilioNumber = "+18457648204"
+	twilioNumber = "+17035551234"
 	passphrase   = "wedding weather"
 
 	weatherHistoryKey = "history1"
@@ -72,7 +72,7 @@ func checkTaskHandler(w http.ResponseWriter, r *http.Request) {
 		msgBody := messageBody(*results)
 		history.update(ctx, *results)
 
-		receiverNumbers := []string{"+18456496408", "+12405384163"}
+		receiverNumbers := []string{"+18455551234", "+12405551234"}
 		for _, n := range receiverNumbers {
 			log.Infof(ctx, "sending to: %s", n)
 			if err := sendMessage(ctx, msgBody, n); err != nil {
